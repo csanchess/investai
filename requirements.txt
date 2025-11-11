@@ -1,5 +1,5 @@
-gpt-2-simple==0.8.1
-tensorflow==1.15
+gpt-2-simple-tf2
+tensorflow==2.15.0
 streamlit==1.30.0
 yfinance
 pandas
