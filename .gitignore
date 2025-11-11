@@ -1,0 +1,8 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# GPT-2 & datasets
+models/
+data/
