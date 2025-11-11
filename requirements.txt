@@ -1,0 +1,8 @@
+gpt-2-simple==0.8.1
+tensorflow==1.15
+streamlit==1.30.0
+yfinance
+pandas
+numpy
+regex
+tqdm
