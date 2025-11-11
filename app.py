@@ -48,32 +48,35 @@ try:
 except Exception as e:
     st.warning(f"Could not retrieve data for {selected_ticker}: {e}")
 
-# --- ESG Section ---
+# --- ESG Section (Fixed Version) ---
 st.header("🌱 ESG Snapshot")
-esg_data = {
-    "Company": [],
-    "ESG Score": [],
-    "Environmental": [],
-    "Social": [],
-    "Governance": [],
-}
+
+esg_data = {"Company": [], "ESG Score": [], "Environmental": [], "Social": [], "Governance": []}
+
 for t in tickers:
     try:
-        info = yf.Ticker(t).sustainability
-        if info is not None:
+        s = yf.Ticker(t).sustainability
+        if s is not None and "Value" in s.columns:
             esg_data["Company"].append(t)
-            esg_data["ESG Score"].append(info.loc["totalEsg", "Value"])
-            esg_data["Environmental"].append(info.loc["environmentScore", "Value"])
-            esg_data["Social"].append(info.loc["socialScore", "Value"])
-            esg_data["Governance"].append(info.loc["governanceScore", "Value"])
-    except Exception:
-        pass
+            esg_data["ESG Score"].append(s.loc["totalEsg", "Value"] if "totalEsg" in s.index else None)
+            esg_data["Environmental"].append(s.loc["environmentScore", "Value"] if "environmentScore" in s.index else None)
+            esg_data["Social"].append(s.loc["socialScore", "Value"] if "socialScore" in s.index else None)
+            esg_data["Governance"].append(s.loc["governanceScore", "Value"] if "governanceScore" in s.index else None)
+        else:
+            esg_data["Company"].append(t)
+            esg_data["ESG Score"].append(None)
+            esg_data["Environmental"].append(None)
+            esg_data["Social"].append(None)
+            esg_data["Governance"].append(None)
+    except Exception as e:
+        esg_data["Company"].append(t)
+        esg_data["ESG Score"].append(None)
+        esg_data["Environmental"].append(None)
+        esg_data["Social"].append(None)
+        esg_data["Governance"].append(None)
 
-if len(esg_data["Company"]) > 0:
-    esg_df = pd.DataFrame(esg_data)
-    st.dataframe(esg_df)
-else:
-    st.info("No ESG data available for these companies (Yahoo API may limit access).")
+esg_df = pd.DataFrame(esg_data)
+st.dataframe(esg_df)
 
 # --- AI Geopolitical + ESG + Finance Analysis ---
 st.header("🤖 AI-Generated Insight")
