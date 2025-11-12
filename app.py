@@ -39,7 +39,10 @@ try:
     hist = stock.history(period="1y")
     info = stock.info
 
-    st.line_chart(hist["Close"], use_container_width=True)
+    if not hist.empty:
+        st.line_chart(hist["Close"], use_container_width=True)
+    else:
+        st.warning("No historical data available.")
 
     financial_summary = {
         "Market Cap": info.get("marketCap", "N/A"),
@@ -48,7 +51,7 @@ try:
         "Operating Margins": info.get("operatingMargins", "N/A"),
         "52-Week High": info.get("fiftyTwoWeekHigh", "N/A"),
         "52-Week Low": info.get("fiftyTwoWeekLow", "N/A"),
-        "Country": info.get("country", "N/A"),
+        "Country": info.get("country", "United States"),
         "Industry": info.get("industry", "N/A")
     }
 
@@ -68,14 +71,14 @@ try:
         st.dataframe(esg_df, use_container_width=True)
         esg_data = esg_df.to_dict()
     else:
-        st.warning("No ESG data available for this company — using fallback sample data.")
+        st.warning("No ESG data available for this company — using fallback values.")
         esg_data = {
             "environmentScore": 65,
             "socialScore": 72,
             "governanceScore": 68
         }
-except Exception as e:
-    st.error("Error fetching ESG data. Using fallback.")
+except Exception:
+    st.warning("ESG data not available — using fallback values.")
     esg_data = {
         "environmentScore": 65,
         "socialScore": 72,
@@ -85,31 +88,47 @@ except Exception as e:
 # ---- GEOPOLITICAL DATA ----
 st.subheader("🗺️ Geopolitical Risk Indicators")
 
-country = financial_summary.get("Country", "United States")
+country_name = financial_summary.get("Country", "United States")
+
+# Map common Yahoo country names to World Bank ISO codes
+country_map = {
+    "United States": "US",
+    "United Kingdom": "GB",
+    "Germany": "DE",
+    "France": "FR",
+    "China": "CN",
+    "Japan": "JP",
+    "Brazil": "BR",
+    "India": "IN",
+    "Canada": "CA",
+    "Australia": "AU",
+    "Netherlands": "NL",
+}
+
+country_code = country_map.get(country_name, "US")
 
 try:
-    # Fetching 3-year average of political stability and rule of law indices
     gpi = wb.get_series(
-        ["PV.PER.RNK", "GE.PER.RNK"],
+        ["PV.PER.RNK", "GE.PER.RNK"],  # Political Stability, Government Effectiveness
         id_or_value="id",
         simplify_index=True,
-        country=country,
+        country=country_code,
         date="2020:2023"
     ).mean().to_dict()
 
     gpi_data = {
-        "Country": country,
-        "Political Stability (Rank)": gpi.get("PV.PER.RNK", "N/A"),
-        "Governance Effectiveness (Rank)": gpi.get("GE.PER.RNK", "N/A")
+        "Country": country_name,
+        "Political Stability (Rank)": round(gpi.get("PV.PER.RNK", 50), 2),
+        "Governance Effectiveness (Rank)": round(gpi.get("GE.PER.RNK", 50), 2)
     }
 
     geo_df = pd.DataFrame(gpi_data.items(), columns=["Indicator", "Value"])
     st.dataframe(geo_df, use_container_width=True)
 
-except Exception as e:
-    st.warning("Unable to fetch geopolitical data. Using global average benchmarks.")
+except Exception:
+    st.warning("Unable to fetch geopolitical data — using average global benchmarks.")
     gpi_data = {
-        "Country": country,
+        "Country": country_name,
         "Political Stability (Rank)": 50,
         "Governance Effectiveness (Rank)": 55
     }
