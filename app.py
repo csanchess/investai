@@ -11,7 +11,6 @@ st.title("🌍 AI-Powered Financial, ESG & Geopolitical Analysis")
 
 # ---- SIDEBAR CONFIG ----
 st.sidebar.header("🔧 Configuration")
-openai_api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
 ticker = st.sidebar.text_input("Enter Stock Ticker (e.g. AAPL, TSLA, MSFT)", "AAPL")
 
 persona = st.sidebar.selectbox(
@@ -24,11 +23,13 @@ persona = st.sidebar.selectbox(
     ]
 )
 
-if not openai_api_key:
-    st.warning("Please enter your OpenAI API key in the sidebar to start.")
+# ---- LOAD API KEY FROM STREAMLIT SECRETS ----
+try:
+    openai_api_key = st.secrets["general"]["openai_api_key"]
+    client = OpenAI(api_key=openai_api_key)
+except Exception:
+    st.error("🔑 Please set your OpenAI API key in `.streamlit/secrets.toml` under `[general] openai_api_key`.")
     st.stop()
-
-client = OpenAI(api_key=openai_api_key)
 
 # ---- FINANCIAL DATA ----
 st.subheader(f"📈 Financial Data for {ticker}")
@@ -169,7 +170,3 @@ if st.button("Run Analysis"):
 
         except Exception as e:
             st.error(f"Error generating AI analysis: {e}")
-
-
-
-
