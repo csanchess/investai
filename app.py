@@ -1,102 +1,175 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
-import torch
-from datetime import datetime
+import yfinance as yf
+from openai import OpenAI
+import world_bank_data as wb
 
-# --- Page Setup ---
-st.set_page_config(page_title="SFX Intelligence: Financial, ESG & Geopolitical AI", layout="wide")
-st.title("🌍 SFX Intelligence – AI Insights for Finance, ESG, and Geopolitics")
+# ---- PAGE CONFIG ----
+st.set_page_config(page_title="AI Stock Analyst", layout="wide")
 
-# --- Sidebar Controls ---
-st.sidebar.header("⚙️ App Controls")
-default_tickers = ["AAPL", "MSFT", "GOOG", "TSLA", "AMZN"]
-tickers_input = st.sidebar.text_input(
-    "Enter company tickers (comma separated):", 
-    ", ".join(default_tickers)
+st.title("🌍 AI-Powered Financial, ESG & Geopolitical Analysis")
+
+# ---- SIDEBAR CONFIG ----
+st.sidebar.header("🔧 Configuration")
+openai_api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
+ticker = st.sidebar.text_input("Enter Stock Ticker (e.g. AAPL, TSLA, MSFT)", "AAPL")
+
+persona = st.sidebar.selectbox(
+    "Select Analyst Persona",
+    [
+        "Financial Analyst",
+        "Sustainability (ESG) Expert",
+        "Geopolitical Risk Advisor",
+        "Integrated Analyst (All-in-One)"
+    ]
 )
-tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 
-max_tokens = st.sidebar.slider("Max tokens for analysis", 50, 300, 150)
-temperature = st.sidebar.slider("Temperature", 0.2, 1.0, 0.7)
+if not openai_api_key:
+    st.warning("Please enter your OpenAI API key in the sidebar to start.")
+    st.stop()
 
-# --- Load GPT-2 model once ---
-@st.cache_resource
-def load_model():
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    model = GPT2LMHeadModel.from_pretrained("gpt2")
-    return tokenizer, model
+client = OpenAI(api_key=openai_api_key)
 
-tokenizer, model = load_model()
-
-# --- Financial Data Section ---
-st.header("📊 Financial Data Overview")
-selected_ticker = st.selectbox("Select a company:", tickers)
+# ---- FINANCIAL DATA ----
+st.subheader(f"📈 Financial Data for {ticker}")
 
 try:
-    stock = yf.Ticker(selected_ticker)
+    stock = yf.Ticker(ticker)
     hist = stock.history(period="1y")
     info = stock.info
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Current Price", f"${info.get('currentPrice', 'N/A')}")
-    col2.metric("Market Cap", f"${info.get('marketCap', 'N/A'):,}")
-    col3.metric("52-Week High", f"${info.get('fiftyTwoWeekHigh', 'N/A')}")
+    st.line_chart(hist["Close"], use_container_width=True)
 
-    st.line_chart(hist["Close"], height=250)
+    financial_summary = {
+        "Market Cap": info.get("marketCap", "N/A"),
+        "Revenue (TTM)": info.get("totalRevenue", "N/A"),
+        "Gross Margins": info.get("grossMargins", "N/A"),
+        "Operating Margins": info.get("operatingMargins", "N/A"),
+        "52-Week High": info.get("fiftyTwoWeekHigh", "N/A"),
+        "52-Week Low": info.get("fiftyTwoWeekLow", "N/A"),
+        "Country": info.get("country", "N/A"),
+        "Industry": info.get("industry", "N/A")
+    }
+
+    fin_df = pd.DataFrame(financial_summary.items(), columns=["Metric", "Value"])
+    st.dataframe(fin_df, use_container_width=True)
+
 except Exception as e:
-    st.warning(f"Could not retrieve data for {selected_ticker}: {e}")
+    st.error(f"Error fetching financial data: {e}")
+    st.stop()
 
-# --- ESG Section (Fixed Version) ---
-st.header("🌱 ESG Snapshot")
+# ---- ESG DATA ----
+st.subheader("🌱 ESG Data (from Yahoo Finance when available)")
 
-esg_data = {"Company": [], "ESG Score": [], "Environmental": [], "Social": [], "Governance": []}
+try:
+    esg_df = stock.sustainability
+    if esg_df is not None:
+        st.dataframe(esg_df, use_container_width=True)
+        esg_data = esg_df.to_dict()
+    else:
+        st.warning("No ESG data available for this company — using fallback sample data.")
+        esg_data = {
+            "environmentScore": 65,
+            "socialScore": 72,
+            "governanceScore": 68
+        }
+except Exception as e:
+    st.error("Error fetching ESG data. Using fallback.")
+    esg_data = {
+        "environmentScore": 65,
+        "socialScore": 72,
+        "governanceScore": 68
+    }
 
-for t in tickers:
-    try:
-        s = yf.Ticker(t).sustainability
-        if s is not None and "Value" in s.columns:
-            esg_data["Company"].append(t)
-            esg_data["ESG Score"].append(s.loc["totalEsg", "Value"] if "totalEsg" in s.index else None)
-            esg_data["Environmental"].append(s.loc["environmentScore", "Value"] if "environmentScore" in s.index else None)
-            esg_data["Social"].append(s.loc["socialScore", "Value"] if "socialScore" in s.index else None)
-            esg_data["Governance"].append(s.loc["governanceScore", "Value"] if "governanceScore" in s.index else None)
-        else:
-            esg_data["Company"].append(t)
-            esg_data["ESG Score"].append(None)
-            esg_data["Environmental"].append(None)
-            esg_data["Social"].append(None)
-            esg_data["Governance"].append(None)
-    except Exception as e:
-        esg_data["Company"].append(t)
-        esg_data["ESG Score"].append(None)
-        esg_data["Environmental"].append(None)
-        esg_data["Social"].append(None)
-        esg_data["Governance"].append(None)
+# ---- GEOPOLITICAL DATA ----
+st.subheader("🗺️ Geopolitical Risk Indicators")
 
-esg_df = pd.DataFrame(esg_data)
-st.dataframe(esg_df)
+country = financial_summary.get("Country", "United States")
 
-# --- AI Geopolitical + ESG + Finance Analysis ---
-st.header("🤖 AI-Generated Insight")
+try:
+    # Fetching 3-year average of political stability and rule of law indices
+    gpi = wb.get_series(
+        ["PV.PER.RNK", "GE.PER.RNK"],
+        id_or_value="id",
+        simplify_index=True,
+        country=country,
+        date="2020:2023"
+    ).mean().to_dict()
 
-default_prompt = f"Analyse the financial performance, ESG factors, and geopolitical risks for {selected_ticker} in {datetime.now().year}."
-prompt = st.text_area("Enter your question or scenario:", value=default_prompt, height=150)
+    gpi_data = {
+        "Country": country,
+        "Political Stability (Rank)": gpi.get("PV.PER.RNK", "N/A"),
+        "Governance Effectiveness (Rank)": gpi.get("GE.PER.RNK", "N/A")
+    }
 
-if st.button("Generate Insight"):
-    with st.spinner("Generating insight..."):
-        inputs = tokenizer(prompt, return_tensors="pt")
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-            do_sample=True,
-            top_p=0.9,
-        )
-        result = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        st.markdown("### 🧭 AI Analysis")
-        st.write(result)
+    geo_df = pd.DataFrame(gpi_data.items(), columns=["Indicator", "Value"])
+    st.dataframe(geo_df, use_container_width=True)
 
-st.markdown("---")
-st.caption("Powered by GPT-2 • Yahoo Finance • Streamlit • SFX Intelligence © 2025")
+except Exception as e:
+    st.warning("Unable to fetch geopolitical data. Using global average benchmarks.")
+    gpi_data = {
+        "Country": country,
+        "Political Stability (Rank)": 50,
+        "Governance Effectiveness (Rank)": 55
+    }
+
+# ---- USER PROMPT ----
+st.subheader("🧠 AI Analysis")
+
+user_prompt = st.text_area(
+    "Enter a custom question or leave blank for automatic analysis:",
+    "Provide a holistic assessment of the company's financial performance, ESG profile, and geopolitical risks for 2025."
+)
+
+# ---- SYSTEM PROMPT BASED ON PERSONA ----
+if persona == "Financial Analyst":
+    system_prompt = (
+        "You are a senior financial analyst. Focus on profitability, growth, valuation ratios, and macroeconomic factors."
+    )
+elif persona == "Sustainability (ESG) Expert":
+    system_prompt = (
+        "You are an ESG and sustainability expert. Assess environmental, social, and governance performance "
+        "and its long-term implications for investors."
+    )
+elif persona == "Geopolitical Risk Advisor":
+    system_prompt = (
+        "You are a geopolitical risk advisor. Assess how global politics, trade dynamics, and regional risks "
+        "affect the company's operations and market outlook."
+    )
+else:
+    system_prompt = (
+        "You are an integrated analyst combining financial, ESG, and geopolitical insights. "
+        "Provide a balanced strategic assessment with actionable investment implications."
+    )
+
+# ---- RUN ANALYSIS ----
+if st.button("Run Analysis"):
+    with st.spinner("Generating AI analysis..."):
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": (
+                f"Company: {ticker}\n"
+                f"Financials: {financial_summary}\n"
+                f"ESG: {esg_data}\n"
+                f"Geopolitics: {gpi_data}\n"
+                f"Task: {user_prompt}"
+            )}
+        ]
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=0.3,
+                max_tokens=800
+            )
+            analysis = response.choices[0].message.content
+            st.markdown(f"### 🧩 {persona} Insights")
+            st.write(analysis)
+
+        except Exception as e:
+            st.error(f"Error generating AI analysis: {e}")
+
+
+
+
