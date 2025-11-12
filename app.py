@@ -25,7 +25,8 @@ persona = st.sidebar.selectbox(
 
 # ---- LOAD API KEY FROM STREAMLIT SECRETS ----
 try:
-    openai_api_key = st.secrets["general"]["openai_api_key"]
+    #openai_api_key = st.secrets["general"]["openai_api_key"]
+    openai_api_key = st.secrets.get("OPENAI_API_KEY")
     client = OpenAI(api_key=openai_api_key)
 except Exception:
     st.error("🔑 Please set your OpenAI API key in `.streamlit/secrets.toml` under `[general] openai_api_key`.")
